@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>New Cairo Villas — Request a callback</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 460px; margin: 48px auto; padding: 0 16px; color: #1e293b; }
+    h1 { font-size: 22px; }
+    form { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+    input, textarea, button { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; }
+    button { background: #2563eb; color: #fff; border: 0; cursor: pointer; }
+    [data-wzgate-status="success"] { color: #047857; }
+    [data-wzgate-status="error"] { color: #b91c1c; }
+    small { color: #64748b; }
+  </style>
+
+  <!--
+    wzgate-form snippet (local-dev variant).
+    - Replace pk_1deb4b7ca7487344944a9dfed89e0719 with the publicToken returned by:
+        POST /integrations/website-form/connect
+      and use the data-endpoint from that response's publicUrl.
+    - PRODUCTION: add Subresource Integrity + crossorigin to the <script> tag, e.g.
+        integrity="sha384-KcxtsXUmDFESrXd9mXRkE49iv3Dkxws3LyW1LHHBQqM4tYGeL0ChUrr5LHyPA4qd"
+        crossorigin="anonymous"
+      (SRI/crossorigin omitted here because the local static server does not send
+       CORS headers; the integrity check requires them for cross-origin scripts.)
+  -->
+  <script src="http://localhost:8088/wzgate-form.js"
+          data-token="pk_1deb4b7ca7487344944a9dfed89e0719"
+          data-endpoint="http://localhost:3004/public/forms/pk_1deb4b7ca7487344944a9dfed89e0719"
+          defer></script>
+</head>
+<body>
+  <h1>New Cairo Villas — Request a callback</h1>
+  <p><small>Open this page with UTMs to test attribution, e.g.<br>
+    <code>?utm_source=facebook&amp;utm_campaign=spring-newcairo&amp;fbclid=FB1</code></small></p>
+
+  <form data-wzgate-form>
+    <input name="firstName" placeholder="First name" required>
+    <input name="email" type="email" placeholder="Email" required>
+    <input name="phone" placeholder="Phone">
+    <textarea name="message" placeholder="Message"></textarea>
+    <!-- honeypot: must stay hidden and empty -->
+    <input name="_gotcha" tabindex="-1" autocomplete="off" style="display:none">
+    <button type="submit">Send</button>
+  </form>
+</body>
+</html>
