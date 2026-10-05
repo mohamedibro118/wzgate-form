@@ -323,6 +323,23 @@
     return String(value == null ? '' : value).replace(/\D/g, '');
   }
 
+  /**
+   * True when two phone numbers, however they are written, are the same line.
+   *
+   * Digits only, leading zeros dropped (`0020…`, a national `0`). Equal, or
+   * one ends with the other and the shorter is at least 9 digits — a local
+   * form against its international one (`01001234567` / `+20 100 123 4567`).
+   */
+  function waSameNumber(a, b) {
+    var x = waDigits(a).replace(/^0+/, '');
+    var y = waDigits(b).replace(/^0+/, '');
+    if (!x || !y) return false;
+    if (x === y) return true;
+    var longer = x.length >= y.length ? x : y;
+    var shorter = x.length >= y.length ? y : x;
+    return shorter.length >= 9 && longer.slice(-shorter.length) === shorter;
+  }
+
   function waDecode(value) {
     return decodeURIComponent(String(value).replace(/\+/g, ' '));
   }
@@ -348,8 +365,9 @@
 
     var textAt = -1;
     var text = '';
-    var hasPhone = inPath;
+    var phone = '';
     try {
+      if (inPath) phone = waDigits(waDecode(head.slice(head.toLowerCase().indexOf('wa.me/') + 6)));
       for (var i = 0; i < params.length; i++) {
         var eq = params[i].indexOf('=');
         var name = waDecode(eq >= 0 ? params[i].slice(0, eq) : params[i]).toLowerCase();
@@ -357,15 +375,15 @@
         if (name === 'text' && textAt < 0) {
           textAt = i;
           text = waDecode(value);
-        } else if (name === 'phone' && waDigits(waDecode(value)).length >= 5) {
-          hasPhone = true;
+        } else if (name === 'phone' && !inPath && !phone && waDigits(waDecode(value)).length >= 5) {
+          phone = waDigits(waDecode(value));
         }
       }
     } catch (e) {
       return null; // malformed escapes — leave the link alone
     }
-    if (!hasPhone) return null;
-    return { head: head, params: params, textAt: textAt, text: text, hash: hash };
+    if (!phone) return null;
+    return { head: head, params: params, textAt: textAt, text: text, hash: hash, phone: phone };
   }
 
   function waIsChatHref(href) {
@@ -541,19 +559,35 @@
       return el.tagName === 'A' || el.tagName === 'AREA';
     }
 
-    /** What `el` should point at now; `base` (its own value) when we have nothing to add. */
+    /**
+     * Only a chat that opens the tenant's INBOX number gets a code: a message
+     * sent to an advisor's own phone never reaches the inbox, so its code
+     * could never be matched. With no inbox number in the CRM's answer there
+     * is nothing to compare against, and every chat link is coded.
+     */
+    function opensInbox(number) {
+      return !waDigits(data.n) || waSameNumber(number, data.n);
+    }
+
+    /**
+     * What `el` should point at now — `url` is `base` (its own value) when we
+     * have nothing to add — and whether that is a link carrying the code.
+     */
     function compute(el, base) {
       var mark = el.getAttribute('data-wz-whatsapp');
-      if (halted || (mark !== null && mark.toLowerCase() === 'off')) return base;
+      if (halted || (mark !== null && mark.toLowerCase() === 'off')) return { url: base, coded: false };
       var target = base;
-      if (!waIsChatHref(base)) {
-        if (mark === null) return base;
+      var parts = waSplitHref(base);
+      var number = parts ? parts.phone : '';
+      if (!parts) {
+        if (mark === null) return { url: base, coded: false };
         // A marked element with no WhatsApp link of its own: build one.
-        var number = waDigits(mark) || waDigits(data.n);
-        if (number.length < 5) return base;
+        number = waDigits(mark) || waDigits(data.n);
+        if (number.length < 5) return { url: base, coded: false };
         target = 'https://wa.me/' + number;
       }
-      return ready ? waRewriteHref(target, data.c, data.t) : target;
+      var coded = ready && opensInbox(number);
+      return { url: coded ? waRewriteHref(target, data.c, data.t) : target, coded: coded, number: number };
     }
 
     function applyTo(el) {
@@ -563,7 +597,11 @@
       // The page (or its framework) rewrote the link since we last did: what
       // is there now is the new original.
       if (!rec || (link && current !== rec.applied)) rec = el.__wzWa = { orig: current, applied: current, url: null };
-      var next = compute(el, rec.orig);
+      var plan = compute(el, rec.orig);
+      var next = plan.url;
+      rec.coded = plan.coded;
+      // Known to open some other number: never coded, so never worth a wait.
+      rec.foreign = !!plan.number && !opensInbox(plan.number);
       if (!link) {
         rec.url = next;
         return;
@@ -743,8 +781,10 @@
       request();
     }
 
-    function reportClick() {
-      if (!ready || !data.c || clickedFor === data.c) return;
+    function reportClick(el) {
+      applyTo(el);
+      // Only a tap on a link that carries the code is a click on the code.
+      if (!ready || !data.c || !el.__wzWa.coded || clickedFor === data.c) return;
       clickedFor = data.c;
       try {
         // Not awaited, and `keepalive` so it survives the page being left.
@@ -812,10 +852,11 @@
         // An element with no href of its own has nothing native to fall back
         // on: this script is what opens it.
         var scripted = !isLinkElement(el) || !el.getAttribute('href');
-        var waitable = plain && !ready && !off && !awaiting && !!inflight;
+        applyTo(el);
+        var waitable = plain && !ready && !off && !awaiting && !!inflight && !el.__wzWa.foreign;
 
         if (!waitable) {
-          reportClick();
+          reportClick(el);
           if (scripted && plain && openFor(el)) event.preventDefault();
           return; // a real link opens natively, untouched by us
         }
@@ -830,7 +871,7 @@
           done = true;
           clearTimeout(timer);
           try {
-            reportClick();
+            reportClick(el);
             openFor(el);
           } catch (e) {
             /* nothing more we can do */
@@ -977,6 +1018,7 @@
       consent: consent,
       rescan: scan,
       isWhatsAppHref: waIsChatHref,
+      sameNumber: waSameNumber,
       rewriteHref: waRewriteHref,
       compose: waCompose,
       apiBase: waApiBase,

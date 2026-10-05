@@ -337,7 +337,7 @@ describe('link rewriting', () => {
 
   it('every text it produces is readable by the server matcher', async () => {
     await ready(issued({ messageTemplate: TEMPLATE_AR }))
-    for (const id of ['bare', 'text', 'api', 'apiBare', 'web', 'scheme', 'arabic', 'marked', 'markedOwn']) {
+    for (const id of ['bare', 'text', 'api', 'apiBare', 'web', 'scheme', 'arabic', 'marked']) {
       expect(serverCodes(textOf($(id))), id).toEqual(['K7Q2M'])
     }
   })
@@ -364,7 +364,8 @@ describe('link rewriting', () => {
     expect($('marked').getAttribute('href')).toBe(
       `https://wa.me/201000000000?text=${encodeURIComponent('Hello, I would like to know more. (ref: K7Q2M)')}`,
     )
-    expect($('markedOwn').getAttribute('href').startsWith('https://wa.me/201112223333?text=')).toBe(true)
+    // Its own number is not the inbox number: a link, but no code.
+    expect($('markedOwn').getAttribute('href')).toBe('https://wa.me/201112223333')
     expect($('button').hasAttribute('href')).toBe(false)
 
     const open = vi.spyOn(wa._nav, 'open').mockImplementation(() => {})
@@ -401,6 +402,112 @@ describe('link rewriting', () => {
     expect($('text').getAttribute('href')).toBe('https://wa.me/201000000000?text=Hello%20there')
     expect($('bare').getAttribute('href')).toBe('https://wa.me/201000000000')
     expect($('marked').hasAttribute('href')).toBe(false)
+  })
+})
+
+describe('only links that open the inbox number are coded', () => {
+  const INBOX = '201001234567'
+  const page = (extra = '') => `${tag()}
+    <a id="intl" href="https://wa.me/+201001234567?text=Hi">1</a>
+    <a id="zeros" href="https://api.whatsapp.com/send?phone=00201001234567&text=Hi">2</a>
+    <a id="local" href="https://wa.me/01001234567?text=Hi" target="_blank">3</a>
+    <a id="advisor" href="https://wa.me/201119998877?text=Hi" target="_blank">advisor</a>
+    <a id="ownInbox" data-wz-whatsapp="+20 100 123 4567">own, inbox</a>
+    <button id="ownOther" data-wz-whatsapp="201119998877">own, other</button>
+    <a id="built" data-wz-whatsapp>built</a>${extra}`
+  const $ = (id) => document.getElementById(id)
+
+  it('sameNumber: one line however it is written', () => {
+    const { sameNumber } = loadScript('https://lp.test/', '')
+    for (const form of ['+20 100 123 4567', '00201001234567', '201001234567', '01001234567', '1001234567', '(+20) 100-123-4567']) {
+      expect(sameNumber(form, INBOX), form).toBe(true)
+      expect(sameNumber(INBOX, form), form).toBe(true)
+    }
+    expect(sameNumber('201119998877', INBOX)).toBe(false) // another advisor
+    expect(sameNumber('201001234568', INBOX)).toBe(false)
+    expect(sameNumber('1234567', INBOX)).toBe(false) // a suffix, but too short to mean anything
+    expect(sameNumber('01234567', '201001234567')).toBe(false)
+    expect(sameNumber('', INBOX)).toBe(false)
+    expect(sameNumber(null, null)).toBe(false)
+  })
+
+  it('codes the inbox number in every written form and leaves any other number as written', async () => {
+    const fetchMock = mockFetch(issued({ whatsappNumber: INBOX }))
+    const wa = loadScript('https://lp.test/', page())
+    const open = vi.spyOn(wa._nav, 'open').mockImplementation(() => {})
+    interact()
+    await settle()
+
+    for (const id of ['intl', 'zeros', 'local', 'ownInbox', 'built']) {
+      expect(serverCodes(textOf($(id))), id).toEqual(['K7Q2M'])
+    }
+    expect($('intl').getAttribute('href').startsWith('https://wa.me/+201001234567?text=')).toBe(true)
+    expect($('advisor').getAttribute('href')).toBe('https://wa.me/201119998877?text=Hi')
+
+    // The advisor link: opens natively, and is not a click on the code.
+    expect(click($('advisor')).defaultPrevented).toBe(false)
+    // An explicit number that is not the inbox: opened, not coded, not reported.
+    expect(click($('ownOther')).defaultPrevented).toBe(true)
+    expect(open).toHaveBeenCalledWith('https://wa.me/201119998877', '_blank')
+    expect(clickedCalls(fetchMock)).toHaveLength(0)
+
+    click($('local'))
+    expect(clickedCalls(fetchMock)).toHaveLength(1)
+  })
+
+  it('does not hold a tap on another number once the inbox number is known', async () => {
+    mockFetch(issued({ whatsappNumber: INBOX }), () => new Promise(() => {}))
+    loadScript('https://lp.test/', page())
+    interact()
+    await settle()
+    window.WzgateForm.whatsapp.stop()
+    delete window.WzgateForm
+
+    // A new ad click: the cached code is not used and a request is in the air.
+    const wa = loadScript('https://lp.test/?gclid=NEW', page())
+    const open = vi.spyOn(wa._nav, 'open').mockImplementation(() => {})
+    expect(click($('advisor')).defaultPrevented).toBe(false)
+    expect(click($('local')).defaultPrevented).toBe(true) // the inbox link is worth the wait
+    await vi.advanceTimersByTimeAsync(300)
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(open).toHaveBeenCalledWith('https://wa.me/01001234567?text=Hi', '_blank')
+  })
+
+  it('a first tap on another number, before the answer, opens as written and reports nothing', async () => {
+    let release
+    const fetchMock = mockFetch(() => new Promise((resolve) => { release = () => resolve(ok(issued({ whatsappNumber: INBOX }))) }))
+    const wa = loadScript('https://lp.test/', page())
+    const open = vi.spyOn(wa._nav, 'open').mockImplementation(() => {})
+    click($('advisor')) // the inbox number is not known yet, so this one waits for it
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(open).toHaveBeenCalledWith('https://wa.me/201119998877?text=Hi', '_blank')
+    expect(clickedCalls(fetchMock)).toHaveLength(0)
+  })
+
+  it('codes every chat link when the answer has no number to compare against', async () => {
+    mockFetch(issued({ whatsappNumber: null }))
+    loadScript('https://lp.test/', page())
+    interact()
+    await settle()
+    for (const id of ['intl', 'local', 'advisor', 'ownInbox']) expect(serverCodes(textOf($(id))), id).toEqual(['K7Q2M'])
+    expect($('built').hasAttribute('href')).toBe(false) // no number to build from
+  })
+
+  it('restores a coded link when the inbox number in the answer changes', async () => {
+    mockFetch(issued({ whatsappNumber: INBOX }), issued({ whatsappNumber: '201119998877' }))
+    const wa = loadScript('https://lp.test/', page())
+    interact()
+    await settle()
+    expect(textOf($('local'))).toBe('Hi (ref: K7Q2M)')
+    expect($('advisor').getAttribute('href')).toBe('https://wa.me/201119998877?text=Hi')
+
+    wa.start({ api: API, locale: 'ar' }) // asks again
+    await settle()
+    expect($('local').getAttribute('href')).toBe('https://wa.me/01001234567?text=Hi')
+    expect($('intl').getAttribute('href')).toBe('https://wa.me/+201001234567?text=Hi')
+    expect($('ownInbox').getAttribute('href')).toBe('https://wa.me/201001234567')
+    expect(textOf($('advisor'))).toBe('Hi (ref: K7Q2M)')
   })
 })
 
@@ -692,7 +799,7 @@ describe('pages that change after load', () => {
     const query = vi.spyOn(document, 'querySelectorAll')
     for (let i = 0; i < 25; i++) {
       const a = document.createElement('a')
-      a.setAttribute('href', `https://wa.me/20100000000${i % 10}?text=Hi`)
+      a.setAttribute('href', `https://wa.me/201000000000?text=Hi&n=${i}`)
       document.getElementById('root').appendChild(a)
     }
     await settle()

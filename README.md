@@ -71,6 +71,11 @@ A tag with only `data-api` (no `data-token` / `data-endpoint`) is valid: click c
    - links added later (client-rendered pages) are picked up by a debounced `MutationObserver`.
    WhatsApp links with **no phone number** (share buttons) and `wa.me/message/…` short links are
    left alone.
+   **Only links to the inbox number are coded:** when the CRM's answer names the WhatsApp number
+   connected to the inbox, a link (or a `data-wz-whatsapp="<number>"`) that opens any other
+   number — an advisor's own phone — is left exactly as written and its taps are not reported,
+   because a message sent there could never be matched (`+20…`, `0020…` and the local `0…` form
+   of the same number all count as the same).
 4. **On the tap** it tells the CRM (`POST …/click-codes/CODE/clicked`, a `keepalive` fetch that is
    never awaited) and the browser follows the link as usual.
 
