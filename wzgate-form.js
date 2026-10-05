@@ -16,8 +16,9 @@
  *     if anything fails, the native submit is allowed to proceed.
  *
  * WhatsApp click codes (v1.1.0, optional — needs data-api on the tag):
- *   <script src=".../wzgate-form.js" data-api="https://crm.example.com/api"
- *           data-site="my-site" data-key="pk_..." defer></script>
+ *   <script src=".../wzgate-form.js" data-token="pk_..." data-endpoint="..."
+ *           data-api="https://crm.example.com/api" defer></script>
+ *   - data-token identifies the landing page to the CRM (sent as formToken).
  *   - Keeps the visit's click ids (gclid, gbraid, wbraid, fbclid) and UTMs,
  *     asks the CRM for a short code on the visitor's first interaction, and
  *     appends it to the pre-filled text of every WhatsApp link on the page.
@@ -684,6 +685,9 @@
       var lang = locale();
       if (lang) out.locale = lang;
       if (data.k === true) out.consent = true;
+      // A landing page names itself by its Website Forms token; the CRM then
+      // scopes the request by that page instead of by a site.
+      if (cfg.formToken) out.formToken = cfg.formToken;
       return out;
     }
 
@@ -789,11 +793,9 @@
       try {
         // Not awaited, and `keepalive` so it survives the page being left.
         // (sendBeacon cannot carry the X-Api-Key header.)
-        var sent = fetch(cfg.api + '/public/click-codes/' + encodeURIComponent(data.c) + '/clicked', {
-          method: 'POST',
-          keepalive: true,
-          headers: headers(false)
-        });
+        var init = { method: 'POST', keepalive: true, headers: headers(!!cfg.formToken) };
+        if (cfg.formToken) init.body = JSON.stringify({ formToken: cfg.formToken });
+        var sent = fetch(cfg.api + '/public/click-codes/' + encodeURIComponent(data.c) + '/clicked', init);
         if (sent && typeof sent.catch === 'function') sent.catch(function () {});
       } catch (e) {
         /* never in the way of the tap */
@@ -911,7 +913,10 @@
         if (config.site) extra['X-Site'] = config.site;
         if (config.key) extra['X-Api-Key'] = config.key;
         Object.keys(config.headers || {}).forEach(function (name) { extra[name] = config.headers[name]; });
-        var next = { api: api, headers: extra, locale: config.locale || '', onState: config.onState, seed: config.seed };
+        var next = {
+          api: api, headers: extra, locale: config.locale || '', onState: config.onState, seed: config.seed,
+          formToken: typeof config.formToken === 'string' && config.formToken ? config.formToken : ''
+        };
 
         if (started) {
           // Called again (a re-render, a locale switch): same visit, new settings.
@@ -1053,7 +1058,8 @@
     }
 
     // WhatsApp click codes: inert without data-api.
-    if (cfg.api) whatsapp.start({ api: cfg.api, site: cfg.site, key: cfg.key, locale: cfg.locale });
+    // The forms token (data-token) doubles as the landing page's identity.
+    if (cfg.api) whatsapp.start({ api: cfg.api, site: cfg.site, key: cfg.key, locale: cfg.locale, formToken: cfg.token });
   }
 
   var whatsapp = createWhatsApp();

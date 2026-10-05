@@ -21,7 +21,7 @@
         POST /integrations/website-form/connect
       and use the data-endpoint from that response's publicUrl.
     - PRODUCTION: add Subresource Integrity + crossorigin to the <script> tag, e.g.
-        integrity="sha384-5pvt6iT+cx8kqRH3m0QFWlPLqUF5xeMN0Q4QmNbiy266HjwdVq/aF8lJSTq96KA/"
+        integrity="sha384-eoW9mP/oCFV9WdgEEzFk/uurhZJvbsIw+V/4RpqFy2BPhKrdaf9Ni8Dph7WZZW86"
         crossorigin="anonymous"
       (SRI/crossorigin omitted here because the local static server does not send
        CORS headers; the integrity check requires them for cross-origin scripts.)
@@ -33,8 +33,8 @@
           defer></script>
   <!--
     data-api switches on WhatsApp click codes (README, "WhatsApp click codes").
-    Locally the CRM accepts any localhost origin; add data-site="<site key>" so it
-    knows which site this page belongs to, and turn tracking on for that site.
+    The page is identified by data-token; turn WhatsApp tracking on for this
+    Website Forms connection and save this page's origin on it.
   -->
 </head>
 <body>

@@ -32,28 +32,52 @@ real source (Google Ads, Meta, organic…) and Google can be told about a conver
 message actually arrives. The CRM issues the code; this script puts it in the pre-filled message
 of the page's WhatsApp links, e.g. `Hello, I would like to know more. (ref: K7Q2M)`.
 
-The feature is **off until the tag has `data-api`**, and does nothing visible until tracking is
-switched on for the site in the CRM (Settings → Websites). The page's domain must be one of the
-site's own domains in the CRM — the CRM refuses any other origin.
+### Install — landing pages
+
+The Website Forms snippet is the install snippet. With `data-api` on it, WhatsApp tracking needs
+nothing else:
 
 ```html
 <script src="https://cdn.jsdelivr.net/gh/mohamedibro118/wzgate-form@stable/wzgate-form.js"
         data-token="pk_..."
         data-endpoint="https://integrations.example.com/public/forms/pk_..."
         data-api="https://crm.example.com/api"
+        defer></script>
+```
+
+| Attribute | What it is |
+|---|---|
+| `data-token` | The Website Forms token. It also identifies the landing page to the CRM: the script sends it as `formToken` with both click-code calls, and the CRM applies that page's own templates and consent setting. |
+| `data-endpoint` | Where forms post (the integration service). Unchanged. |
+| `data-api` | The CRM's public base URL — `https://crm.example.com`, `…/api` and `…/api/` all work. Without it the click-code feature does not run at all. |
+| `data-locale` | Optional, `ar` or `en`: the language of the pre-filled message. Defaults to the page's `<html lang>`, then to the CRM's default. |
+
+Two things must be true in the CRM (Marketing → Integrations → the Website Forms connection):
+WhatsApp tracking is switched on for that landing page, and **the landing page's domain is the
+one saved on the connection** — the CRM refuses the token from any other origin. An unknown or
+switched-off token is answered "off", and every link stays as the page wrote it.
+
+### Install — a page on a WzState website's own domain
+
+Only for a page served from one of a WzState website's own domains that loads this script by hand
+(the WzState public site itself already has it built in). There is no forms token; the CRM
+recognises the site by the page's origin:
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/mohamedibro118/wzgate-form@stable/wzgate-form.js"
+        data-api="https://crm.example.com/api"
         data-site="my-site"
         data-key="pk_site_..."
         defer></script>
 ```
 
-| Attribute | Needed | What it is |
-|---|---|---|
-| `data-api` | yes, for click codes | The CRM's public base URL. `https://crm.example.com`, `…/api` and `…/api/` all work. Forms keep posting to `data-endpoint` (the integration service); click codes go to the CRM. |
-| `data-site` | optional | The site key (CRM → Settings → Websites), sent as `X-Site`. Not needed when the page is served from one of the site's own domains — the CRM then recognises the site by the page's origin. Use it when the organization runs several sites or the domain is shared. |
-| `data-key` | optional today | The site's **publishable** API key (`pk_…`, CRM → Settings → Websites → Connect your website), sent as `X-Api-Key`. Required once the CRM enforces public API keys (`PUBLIC_API_KEYS_MODE=enforce`). It is not a secret and only works from the site's own domains. It is **not** the form token in `data-token`. |
-| `data-locale` | optional | `ar` or `en` — the language of the pre-filled message. Defaults to the page's `<html lang>`, then to the site's own default. |
+- `data-site` — optional. The site key (CRM → Settings → Websites), sent as `X-Site`; needed only
+  when the origin alone does not say which of the organization's sites this is.
+- `data-key` — the site's **publishable** API key, sent as `X-Api-Key`; required once the CRM
+  enforces public API keys. It is not the forms token.
 
-A tag with only `data-api` (no `data-token` / `data-endpoint`) is valid: click codes without forms.
+If a tag carries both a forms token and `data-site` / `data-key`, all of them are sent and the
+CRM goes by the token.
 
 ### What it does
 

@@ -187,6 +187,69 @@ describe('configuration', () => {
   })
 })
 
+describe('landing pages: the Website Forms token', () => {
+  const LINK = '<a id="w" href="https://wa.me/201000000000?text=Hi">WhatsApp</a>'
+  const FORMS = 'data-token="pk_form_1" data-endpoint="https://is.test/public/forms/pk_form_1"'
+
+  it('sends the token as formToken on both calls, and needs no site header', async () => {
+    const fetchMock = mockFetch(issued())
+    loadScript('https://lp.test/', `<script ${FORMS} data-api="${API}"></script>${LINK}`)
+    interact()
+    await settle()
+    click(document.getElementById('w'))
+
+    const [, issue] = issueCalls(fetchMock)[0]
+    expect(issue.headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(bodyOf(issueCalls(fetchMock)[0]).formToken).toBe('pk_form_1')
+
+    const [url, clicked] = clickedCalls(fetchMock)[0]
+    expect(url).toBe(`${API}/public/click-codes/K7Q2M/clicked`)
+    expect(clicked).toEqual({
+      method: 'POST',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ formToken: 'pk_form_1' }),
+    })
+  })
+
+  it('without a token the requests are what they were: no formToken, no clicked body', async () => {
+    const fetchMock = mockFetch(issued())
+    loadScript('https://lp.test/', `${tag(`data-api="${API}" data-site="my-site"`)}${LINK}`)
+    interact()
+    await settle()
+    click(document.getElementById('w'))
+
+    expect(Object.keys(bodyOf(issueCalls(fetchMock)[0])).sort()).toEqual(['anonymousVisitorId', 'landingUrl'])
+    expect(clickedCalls(fetchMock)[0][1]).toEqual({ method: 'POST', keepalive: true, headers: { 'X-Site': 'my-site' } })
+  })
+
+  it('sends everything when a token and data-site / data-key are both there (the server decides)', async () => {
+    const fetchMock = mockFetch(issued())
+    loadScript('https://lp.test/', `<script ${FORMS} data-api="${API}" data-site="my-site" data-key="pk_site_1"></script>${LINK}`)
+    interact()
+    await settle()
+    click(document.getElementById('w'))
+
+    expect(issueCalls(fetchMock)[0][1].headers).toEqual({ 'X-Site': 'my-site', 'X-Api-Key': 'pk_site_1', 'Content-Type': 'application/json' })
+    expect(bodyOf(issueCalls(fetchMock)[0]).formToken).toBe('pk_form_1')
+    expect(clickedCalls(fetchMock)[0][1].headers).toEqual({ 'X-Site': 'my-site', 'X-Api-Key': 'pk_site_1', 'Content-Type': 'application/json' })
+    expect(clickedCalls(fetchMock)[0][1].body).toBe(JSON.stringify({ formToken: 'pk_form_1' }))
+  })
+
+  it('an unknown or disabled token is answered enabled:false: links untouched, nothing reported', async () => {
+    const fetchMock = mockFetch(OFF)
+    const wa = loadScript('https://lp.test/?gclid=G1', `<script ${FORMS} data-api="${API}"></script>${LINK}`)
+    interact()
+    await settle()
+
+    expect(wa.state()).toMatchObject({ off: true, code: null })
+    expect(document.getElementById('w').getAttribute('href')).toBe('https://wa.me/201000000000?text=Hi')
+    expect(click(document.getElementById('w')).defaultPrevented).toBe(false)
+    expect(clickedCalls(fetchMock)).toHaveLength(0)
+    expect(localStorage.getItem('wz_wa')).toBeNull()
+  })
+})
+
 describe('the visit: click ids, UTMs and the visitor id', () => {
   it('asks for a code on the first interaction — not on load — with what the landing URL carried', async () => {
     const fetchMock = mockFetch(issued())
