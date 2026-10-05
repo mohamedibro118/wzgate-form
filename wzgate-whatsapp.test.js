@@ -162,6 +162,15 @@ describe('configuration', () => {
     expect(issueCalls(fetchMock)[0][1].headers).toEqual({ 'Content-Type': 'application/json' })
   })
 
+  it('a click-codes-only tag writes no form attribution and warns about nothing', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockFetch(issued())
+    loadScript('https://lp.test/?utm_source=google&gclid=G1', tag())
+    expect(warn).not.toHaveBeenCalled()
+    expect(localStorage.getItem('wz_ft')).toBeNull()
+    expect(localStorage.getItem('wz_ci')).toBeNull()
+  })
+
   it('does nothing the second time the script is included', async () => {
     const fetchMock = mockFetch(issued())
     loadScript('https://lp.test/', `${tag()}<a id="w" href="https://wa.me/201000000000?text=Hi">WhatsApp</a>`)

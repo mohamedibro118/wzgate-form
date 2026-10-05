@@ -993,15 +993,18 @@
   function init() {
     var cfg = readScriptConfig();
     try {
-      var attribution = captureAttribution(location.href, nowIso());
-      var config = { token: cfg.token, endpoint: cfg.endpoint, attribution: attribution };
-
       var forms = document.querySelectorAll('form[data-wzgate-form]');
-      for (var i = 0; i < forms.length; i++) bindForm(forms[i], config);
+      // A page that uses the script for click codes only (no form tag
+      // attributes, no form) gets no form attribution written and no warning.
+      if (forms.length || cfg.forms) {
+        var attribution = captureAttribution(location.href, nowIso());
+        var config = { token: cfg.token, endpoint: cfg.endpoint, attribution: attribution };
+        for (var i = 0; i < forms.length; i++) bindForm(forms[i], config);
 
-      if ((!cfg.token || !cfg.endpoint) && (forms.length || cfg.forms)) {
-        // Misconfigured snippet — surface it for the developer, but don't throw.
-        if (window.console) console.warn('[wzgate-form] missing data-token or data-endpoint; forms will not be captured.');
+        if (!cfg.token || !cfg.endpoint) {
+          // Misconfigured snippet — surface it for the developer, but don't throw.
+          if (window.console) console.warn('[wzgate-form] missing data-token or data-endpoint; forms will not be captured.');
+        }
       }
     } catch (e) {
       /* never let form capture take the page (or the click codes below) down */
