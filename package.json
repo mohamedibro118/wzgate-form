@@ -1,12 +1,12 @@
 {
   "name": "wzgate-form",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Drop-in landing-page lead capture script for the wzgate CRM",
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "sri": "node -e \"const c=require('crypto'),fs=require('fs');const h=c.createHash('sha384').update(fs.readFileSync('wzgate-form.js')).digest('base64');console.log('sha384-'+h)\""
+    "sri": "node -e \"const c=require('crypto'),fs=require('fs');const h=c.createHash('sha384').update(fs.readFileSync('wzgate-form.js')).digest('base64');fs.writeFileSync('wzgate-form.js.sri','sha384-'+h+'\\n');console.log('sha384-'+h)\""
   },
   "devDependencies": {
     "jsdom": "^29.1.1",

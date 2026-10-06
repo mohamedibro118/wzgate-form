@@ -21,7 +21,7 @@
         POST /integrations/website-form/connect
       and use the data-endpoint from that response's publicUrl.
     - PRODUCTION: add Subresource Integrity + crossorigin to the <script> tag, e.g.
-        integrity="sha384-KcxtsXUmDFESrXd9mXRkE49iv3Dkxws3LyW1LHHBQqM4tYGeL0ChUrr5LHyPA4qd"
+        integrity="sha384-eoW9mP/oCFV9WdgEEzFk/uurhZJvbsIw+V/4RpqFy2BPhKrdaf9Ni8Dph7WZZW86"
         crossorigin="anonymous"
       (SRI/crossorigin omitted here because the local static server does not send
        CORS headers; the integrity check requires them for cross-origin scripts.)
@@ -29,7 +29,13 @@
   <script src="http://localhost:8088/wzgate-form.js"
           data-token="pk_1deb4b7ca7487344944a9dfed89e0719"
           data-endpoint="http://localhost:3004/public/forms/pk_1deb4b7ca7487344944a9dfed89e0719"
+          data-api="http://localhost:3000/api"
           defer></script>
+  <!--
+    data-api switches on WhatsApp click codes (README, "WhatsApp click codes").
+    The page is identified by data-token; turn WhatsApp tracking on for this
+    Website Forms connection and save this page's origin on it.
+  -->
 </head>
 <body>
   <h1>New Cairo Villas — Request a callback</h1>
@@ -45,5 +51,12 @@
     <input name="_gotcha" tabindex="-1" autocomplete="off" style="display:none">
     <button type="submit">Send</button>
   </form>
+
+  <h2 style="font-size:18px;margin-top:32px">Or message us</h2>
+  <p>
+    <a href="https://wa.me/201000000000?text=I%20am%20interested%20in%20New%20Cairo%20Villas" target="_blank" rel="noopener">WhatsApp (link with its own text)</a><br>
+    <a href="https://wa.me/201000000000" target="_blank" rel="noopener">WhatsApp (no text: the site template)</a><br>
+    <button type="button" data-wz-whatsapp>WhatsApp (number from the CRM)</button>
+  </p>
 </body>
 </html>
